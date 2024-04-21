@@ -1,2 +1,2 @@
-# wp_deposit_payments
-Wordpress plugin for Deposit and Recurring payments with Stripe integration
+# deposit-payments-wp
+Deposit and Recurring payments with Stripe integration - WordPress plugin
