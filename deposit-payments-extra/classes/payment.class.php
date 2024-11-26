@@ -57,11 +57,19 @@ class Deposit_extra_payment {
     public function confirm_payment_intent( $intent_id ) {
 
         $intent = \Stripe\PaymentIntent::retrieve( $intent_id );
-
+        
         try {
-            $res = array("success" => true, "intent" => $intent->confirm());
-        } catch (\Stripe\Error\Base $e) {
+            
+            $confirm = $intent->confirm();
 
+            if( $confirm['status'] == 'succeeded' ) {
+                $res = array("success" => true, "message" => "");
+            } else {
+                $res = array("error" => true, "message" => "");
+            }
+
+        } catch (\Stripe\Error\Base $e) {
+            $res = array("error" => true, "message" => $e->getMessage());
         } catch (Exception $e) {
             $res = array("error" => true, "message" => $e->getMessage());
         }

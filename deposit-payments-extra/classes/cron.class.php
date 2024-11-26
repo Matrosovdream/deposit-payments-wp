@@ -76,17 +76,24 @@ Class Deposit_extra_cron {
                     //echo $intent_id;
     
                     $charge = $payment->confirm_payment_intent( $intent_id );
-                    
+
+                    echo "<pre>";
+                    print_r($charge);
+                    echo "</pre>";
+
                     if( $charge['success'] ) {
                         $order->update_meta_data('_is_paid', true, true);
 
-                        $order->set_status('completed');
+                        $order->set_status('processing');
                         $order->save();
-                    } else {
+                    }
+
+                    if( $charge['error'] ) {
                         $order->set_status('failed', $charge['message']);
                         $order->save();
-                    }                
-    
+                    }         
+                    
+
                 }
     
             }
