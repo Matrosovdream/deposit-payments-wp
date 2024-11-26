@@ -16,6 +16,8 @@ Class Deposit_extra_order {
         $parent_order_id = $order_id;
         $order = wc_get_order( $parent_order_id );
 
+        $order->update_meta_data('_deposit_orders_created', false);
+
         if( $order->get_meta('_deposit_orders_created') ) { return false; }
 
         $currency = $order->get_currency();
@@ -29,11 +31,19 @@ Class Deposit_extra_order {
 
             $installment = $productClass->get_installment( $selected_plan );
 
+            /*
+            echo "<pre>";
+            print_r($installment);
+            echo "</pre>";
+            die();
+            */
+
             if( is_array($installment['payments']) && count( $installment['payments'] ) > 0 ) {
 
-                foreach( $installment['payments'] as $payment_plan ) {
+                foreach( $installment['payments'] as $key=>$payment_plan ) {
 
-                    $orders[] = $this->create_order_by_plan( $payment_plan, $product_full_price, $parent_order_id, $product_id );
+                    $count = $key+1;
+                    $orders[] = $this->create_order_by_plan( $payment_plan, $product_full_price, $parent_order_id, $product_id, $count );
 
                 }
 
@@ -52,7 +62,7 @@ Class Deposit_extra_order {
     }
 
 
-    public function create_order_by_plan( $payment, $product_full_price, $parent_order_id, $product_id ) {
+    public function create_order_by_plan( $payment, $product_full_price, $parent_order_id, $product_id, $installment_number ) {
 
         $parent_order = wc_get_order( $parent_order_id );
 
@@ -62,7 +72,8 @@ Class Deposit_extra_order {
 
         $data = array(
             'amount' => $payment_sum,
-            'replace_product_id' => $product_id
+            'replace_product_id' => $product_id,
+            'installment_number' => $installment_number
         );
 
         // Create order
@@ -134,18 +145,6 @@ Class Deposit_extra_order {
 
     }
 
-    public function create_installments( $order_id=false)  {
-
-        if( !$order_id ) { return false; }
-
-        $orders = array();
-        foreach( $installments as $item ) {
-            $orders[] = $this->create_child_order( $order_id, $item );
-        }
-  
-        return $orders;
-        
-    }
 
     public function create_child_order( $parent_order_id=false, $data ) {
 
@@ -193,6 +192,7 @@ Class Deposit_extra_order {
         $order->add_order_note( __( 'Installment order for '.$parent_order_id.'.', 'deposit-payments-extra' ) );
         $order->add_meta_data( '_installment_order_for', $parent_order_id );
         $order->add_meta_data( '_parent_order', $parent_order_id );
+        $order->add_meta_data( 'installment_number', $data['installment_number'] );
       
         $order->set_customer_id($user_id);
         $order->calculate_totals();
@@ -238,7 +238,74 @@ Class Deposit_extra_order {
 
     }
 
+    public static function chargeOrder( $order_id ) {
 
+        $payment = new Deposit_extra_payment;
+
+        $order = wc_get_order( $order_id );
+
+        $intent_id = $order->get_meta('_stripe_intent_id', true);
+
+        if( 
+            !$intent_id ||
+            !self::validatePaymentIntent( $order_id )
+            ) { return false; }
+
+        $charge = $payment->confirm_payment_intent( $intent_id );
+
+        $status = '';
+        $message = '';
+
+        if( $charge['success'] ) {
+            $order->update_meta_data('_is_paid', true, true);
+
+            $order->set_status('processing');
+            $order->save();
+
+            $status = 'success';
+            $message = 'Payment successful';
+        }
+
+        if( $charge['error'] ) {
+            $order->set_status('failed', $charge['message']);
+            $order->save();
+
+            $status = 'fail';
+            $message = $charge['message'];
+        }
+
+        return array(
+            'status' => $status,
+            'message' => $message
+        );
+
+    }
+
+    public static function validatePaymentIntent( $order_id ) {
+
+        $order = wc_get_order( $order_id );
+
+        // If the user is the owner of the order
+        if( get_current_user_id() == $order->get_user_id() ) {
+            return true;
+        }
+
+    }
+
+    /*
+    public function create_installments( $order_id=false)  {
+
+        if( !$order_id ) { return false; }
+
+        $orders = array();
+        foreach( $installments as $item ) {
+            $orders[] = $this->create_child_order( $order_id, $item );
+        }
+  
+        return $orders;
+        
+    }
+    */
 
 }
 
